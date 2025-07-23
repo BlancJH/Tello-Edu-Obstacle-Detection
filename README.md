@@ -1,17 +1,22 @@
 # Tello Obstacle Detection
 
-This project demonstrates obstacle detection on the DJI Tello EDU using Python, `djitellopy`, and OpenCV. It applies Canny edge detection to the drone's video stream and shows both the raw and processed frames side by side.
+This project focuses on integrating OpenCV with Monocular RGB depth estimation to avoid obstacles indoor environment.
 
-## Project Layout
+## Table of Content
 
-```
-tello-obstacle-detection/
-├── src/tello_obstacle_detection/
-├── tests/
-├── docs/
-├── scripts/
-├── data/
-└── logs/
-```
+## Design Rationale
 
-See `docs/usage.md` for setup and run instructions.
+### Navigation Strategy
+Why a pre‑defined grid?
+
+Sensor constraints
+The Tello EDU has only a monocular camera and no depth, LiDAR or IMU strong enough for reliable SLAM. Without adequate onboard sensors, any on‑the‑fly map‑building would drift or fail. Additionally, the drone cannot know its real‑world coordinates at take‑off or during flight as it does not have a GPS. A fixed grid map gives us predefined waypoints in a common reference frame, so the drone “knows” where to start, where to go, and when it’s arrived.
+
+Deterministic waypoints
+By splitting our rectangular arena into a fixed grid with drawing an “X” inside each cell, we know exactly where every corner and cell‑center is in advance. This guarantees reproducible flight paths.
+
+Trade‑offs
+
+Pros: Low computation, zero mapping drift, easy debugging.
+
+Cons: Not effective to real-world uncontrolled environment.
