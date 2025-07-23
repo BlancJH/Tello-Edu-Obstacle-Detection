@@ -20,3 +20,7 @@ Trade‑offs
 Pros: Low computation, zero mapping drift, easy debugging.
 
 Cons: Not effective to real-world uncontrolled environment.
+
+## Reference
+
+[NetworkX](https://networkx.org/) under the BSD‑3‑Clause License [NetworkX.LICENSE.txt](NetworkX.LICENSE.txt)
