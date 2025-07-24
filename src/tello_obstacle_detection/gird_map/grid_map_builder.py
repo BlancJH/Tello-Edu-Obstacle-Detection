@@ -1,7 +1,7 @@
 import math
 import networkx as nx
 
-def build_grid_x_graph_fixed_spacing(width, length, spacing=0.5):
+def build_grid_x_graph(width, length, spacing=0.5):
     """
     Build a navigation graph over a flat, rectangular area on the ground
     with all grid nodes exactly `spacing` meters apart (e.g. 0.5 m).
