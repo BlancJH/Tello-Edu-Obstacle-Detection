@@ -1,83 +1,70 @@
 import math
 import networkx as nx
 
-def build_grid_x_graph(W, L, Nx, Ny):
+def build_grid_x_graph_fixed_spacing(width, length, spacing=0.5):
     """
-    Build a navigation graph over a flat, rectangular area on the ground.
-
-    The drone takes off to a fixed altitude and then navigates only
-    in the horizontal plane, where:
-
-        x ∈ [ -width/2, +width/2 ] (meters east–west)
-        y ∈ [0, length ] (meters north–south)
-
-    The rectangle is subdivided into Nx columns (along x) and Ny rows
-    (along y), and each cell gets an “X” (diagonals from its center to corners).
+    Build a navigation graph over a flat, rectangular area on the ground
+    with all grid nodes exactly `spacing` meters apart (e.g. 0.5 m).
+    The drone flies at fixed altitude and navigates in the horizontal (x, y) plane.
 
     Parameters:
-        width (float): total span along the x‑axis (meters).
-        length (float): total span along the y‑axis (meters).
-        Nx (int): how many columns to split the width into.
-        Ny (int): how many rows to split the length into.
+        width (float): east–west span in meters.
+        length (float): north–south span in meters.
+        spacing (float): distance between adjacent grid nodes in meters.
 
     Returns:
-        G (networkx.Graph):
-            Each node has attribute 'coord' = (x, y) on the ground.
-        nodes (dict of (x, y) → int):
-            Maps each waypoint coordinate to its node index in G.
+        G (networkx.Graph): graph; each node has attribute 'coord' = (x, y).
+        nodes (dict): mapping from (x, y) to node index in G.
     """
-    dx = W / Nx # cell size in x (meters)
-    dy = L / Ny # cell size in y (meters)
+    if spacing <= 0:
+        raise ValueError("spacing must be positive")
+    if width <= 0 or length <= 0:
+        raise ValueError("width and length must be positive")
 
-    # 1. Create all nodes: grid corners + cell centers
+    Nx = int(round(width / spacing))
+    Ny = int(round(length / spacing))
+    if Nx < 1 or Ny < 1:
+        raise ValueError("width and length must each be at least spacing")
+
+    actual_width = Nx * spacing
+    actual_length = Ny * spacing
+    dx = spacing
+    dy = spacing
+
     nodes = {}
     idx = 0
-
-    # Grid corners
+    # 1. Grid corners
     for i in range(Nx + 1):
-        x = -W/2 + i * dx
+        x = -actual_width / 2 + i * dx
         for j in range(Ny + 1):
             y = j * dy
-            coord = (x, y) # coord is the (x, y) point in space
-            nodes[coord] = idx
+            nodes[(x, y)] = idx
             idx += 1
 
-    # Cell centers (where diagonals cross)
+    # 2. Cell centers (where diagonals cross)
     for i in range(Nx):
-        cx = -W/2 + (i + 0.5) * dx
+        cx = -actual_width / 2 + (i + 0.5) * dx
         for j in range(Ny):
             cy = (j + 0.5) * dy
-            coord = (cx, cy)
-            nodes[coord] = idx
+            nodes[(cx, cy)] = idx
             idx += 1
 
-    # 2. Build the graph and wire up center→corner edges
+    # 3. Build graph and connect each center to its four corners
     G = nx.Graph()
     for coord, node_id in nodes.items():
         G.add_node(node_id, coord=coord)
 
-    # For each cell, connect its center to each of its four corners
     for i in range(Nx):
-        x0 = -W/2 + i * dx
+        x0 = -actual_width / 2 + i * dx
         x1 = x0 + dx
         for j in range(Ny):
             y0 = j * dy
             y1 = y0 + dy
-
-            corners = [
-                (x0, y0),
-                (x1, y0),
-                (x1, y1),
-                (x0, y1),
-            ]
-            center = (-W/2 + (i + 0.5) * dx, (j + 0.5) * dy)
+            center = (-actual_width / 2 + (i + 0.5) * dx, (j + 0.5) * dy)
             c_idx = nodes[center]
-
-            for corner in corners:
+            for corner in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]:
                 corner_idx = nodes[corner]
-                # Euclidean distance in same units as W/H
-                dist = math.hypot(corner[0] - center[0],
-                                  corner[1] - center[1])
+                dist = math.hypot(corner[0] - center[0], corner[1] - center[1])
                 G.add_edge(c_idx, corner_idx, weight=dist)
 
     return G, nodes
