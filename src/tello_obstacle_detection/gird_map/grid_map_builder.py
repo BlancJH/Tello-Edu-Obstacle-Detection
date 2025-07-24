@@ -1,70 +1,83 @@
 import math
 import networkx as nx
 
-def build_grid_x_graph(W, H, Nx, Ny):
+def build_grid_x_graph(W, L, Nx, Ny):
     """
-    Builds a navigation graph over a rectangular area subdivided into a grid,  
-    with each cell containing an “X” (diagonals) for possible flight paths.
+    Build a navigation graph over a flat, rectangular area on the ground.
+
+    The drone takes off to a fixed altitude and then navigates only
+    in the horizontal plane, where:
+
+        x ∈ [ -width/2, +width/2 ] (meters east–west)
+        y ∈ [0, length ] (meters north–south)
+
+    The rectangle is subdivided into Nx columns (along x) and Ny rows
+    (along y), and each cell gets an “X” (diagonals from its center to corners).
 
     Parameters:
-        W (float): Width of the rectangle in meters
-        H (float): Height of the rectangle in meters
-        Nx (int): Number of columns
-        Ny (int): Number of rows
+        width (float): total span along the x‑axis (meters).
+        length (float): total span along the y‑axis (meters).
+        Nx (int): how many columns to split the width into.
+        Ny (int): how many rows to split the length into.
 
     Returns:
-        G (networkx.Graph): An undirected graph where:
-            - Each node represents a key waypoint (grid corner or cell center).
-            - Each edge connects a cell center to each of its four corners.
-            - Edge weights are the Euclidean distances (in the same units as W/H).
-        nodes (dict): Mapping from coordinate tuple → node index.
-            - Key `'coord'` in node attributes is the (x, y) position of that node.
+        G (networkx.Graph):
+            Each node has attribute 'coord' = (x, y) on the ground.
+        nodes (dict of (x, y) → int):
+            Maps each waypoint coordinate to its node index in G.
     """
-    # Compute cell dimensions
-    dx = W / Nx # width of each cell
-    dy = H / Ny # height of each cell
+    dx = W / Nx # cell size in x (meters)
+    dy = L / Ny # cell size in y (meters)
 
     # 1. Create all nodes: grid corners + cell centers
-    nodes = {} # maps (x, y) coordinate → unique integer node index
-    node_idx = 0 # incremental ID
+    nodes = {}
+    idx = 0
 
-    # Add every grid corner
+    # Grid corners
     for i in range(Nx + 1):
+        x = -W/2 + i * dx
         for j in range(Ny + 1):
-            coord = (i * dx, j * dy) # coord is the (x, y) point in the plane
-            nodes[coord] = node_idx
-            node_idx += 1
+            y = j * dy
+            coord = (x, y) # coord is the (x, y) point in space
+            nodes[coord] = idx
+            idx += 1
 
-    # Add each cell’s center (intersection of the “X”)
+    # Cell centers (where diagonals cross)
     for i in range(Nx):
+        cx = -W/2 + (i + 0.5) * dx
         for j in range(Ny):
-            coord = (i * dx + dx / 2, j * dy + dy / 2)
-            nodes[coord] = node_idx
-            node_idx += 1
+            cy = (j + 0.5) * dy
+            coord = (cx, cy)
+            nodes[coord] = idx
+            idx += 1
 
-    # 2. Build the graph and connect centers to corners
+    # 2. Build the graph and wire up center→corner edges
     G = nx.Graph()
-    # Add nodes with their coordinate attribute
-    for coord, idx in nodes.items():
-        G.add_node(idx, coord=coord)
+    for coord, node_id in nodes.items():
+        G.add_node(node_id, coord=coord)
 
-    # For each cell, connect its center node to each of the four corners
+    # For each cell, connect its center to each of its four corners
     for i in range(Nx):
+        x0 = -W/2 + i * dx
+        x1 = x0 + dx
         for j in range(Ny):
-            # List the four corner coordinates of cell (i, j)
+            y0 = j * dy
+            y1 = y0 + dy
+
             corners = [
-                (i * dx, j * dy),
-                ((i + 1) * dx, j * dy),
-                ((i + 1) * dx, (j + 1) * dy),
-                (i * dx, (j + 1) * dy),
+                (x0, y0),
+                (x1, y0),
+                (x1, y1),
+                (x0, y1),
             ]
-            center = (i * dx + dx / 2, j * dy + dy / 2)
-            center_idx = nodes[center]
-            # Connect center to each corner, weighting by Euclidean distance
+            center = (-W/2 + (i + 0.5) * dx, (j + 0.5) * dy)
+            c_idx = nodes[center]
+
             for corner in corners:
                 corner_idx = nodes[corner]
+                # Euclidean distance in same units as W/H
                 dist = math.hypot(corner[0] - center[0],
                                   corner[1] - center[1])
-                G.add_edge(corner_idx, center_idx, weight=dist)
+                G.add_edge(c_idx, corner_idx, weight=dist)
 
     return G, nodes
