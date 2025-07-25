@@ -67,4 +67,16 @@ def build_grid_x_graph(width, length, spacing=0.5):
                 dist = math.hypot(corner[0] - center[0], corner[1] - center[1])
                 G.add_edge(c_idx, corner_idx, weight=dist)
 
+    # 4. Connect corner-to-corner horizontally and vertically
+    for coord, nid in list(nodes.items()):
+        x, y = coord
+        # only if this is a corner (multiples of spacing)
+        if abs((x + actual_width/2) % spacing) < 1e-6 and abs(y % spacing) < 1e-6:
+            # neighbor offsets east and north
+            for dx_off, dy_off in [(spacing, 0), (0, spacing)]:
+                nbr = (x + dx_off, y + dy_off)
+                if nbr in nodes:
+                    nid2 = nodes[nbr]
+                    G.add_edge(nid, nid2, weight=math.hypot(dx_off, dy_off))
+                    
     return G, nodes
