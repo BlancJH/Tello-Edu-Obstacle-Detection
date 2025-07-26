@@ -45,24 +45,24 @@ def execute_simple_route(width, length, spacing, goal, altitude=1.0):
     goal (x,y) in meters: destination coordinate
     altitude (m): takeoff altitude to maintain
     """
-    # 1) build mesh and plan
+    # 1. build mesh and plan
     G, nodes = build_grid_x_graph(width, length, spacing)
     path = find_path(G, nodes, start=(0.0, 0.0), goal=goal)
     print("Planned waypoints:", path)
 
-    # 2) connect and takeoff
+    # 2. connect and takeoff
     drone = Tello()
     drone.connect()
-    drone.takeoff()                       # ascend to default ~0.25m
+    drone.takeoff() # ascend to default ~0.25m
     # optionally gain extra altitude
-    drone.move_up(int(altitude * 100))    # ascend to desired altitude
+    drone.move_up(int(altitude * 100)) # ascend to desired altitude
 
-    # 3) follow waypoints
+    # 3. follow waypoints
     pos = (0.0, 0.0)
     heading = 0.0  # assume facing +X
     for wp in path:
         pos, heading = move_toward(drone, wp, pos, heading)
         time.sleep(0.5)  # small pause between moves
 
-    # 4) land when done
+    # 4. land when done
     drone.land()
