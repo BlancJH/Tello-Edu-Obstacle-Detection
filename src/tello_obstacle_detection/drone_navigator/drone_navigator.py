@@ -1,8 +1,8 @@
 import math
 import time
 from djitellopy import Tello
-from gird_map.grid_map_builder import build_grid_x_graph
-from path_calculator.path_calculator import find_path
+from tello_obstacle_detection.gird_map.grid_map_builder import build_grid_x_graph
+from tello_obstacle_detection.path_calculator.path_calculator import find_path
 
 def move_toward(drone, target, pos, heading):
     """
