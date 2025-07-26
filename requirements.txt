@@ -1,6 +1,11 @@
 av==15.0.0
 djitellopy==2.5.0
+filelock==3.18.0
+fsspec==2025.7.0
 iniconfig==2.1.0
+Jinja2==3.1.6
+MarkupSafe==3.0.2
+mpmath==1.3.0
 networkx==3.5
 numpy==2.2.6
 opencv-python==4.12.0.88
@@ -9,3 +14,8 @@ pillow==11.3.0
 pluggy==1.6.0
 Pygments==2.19.2
 pytest==8.4.1
+sympy==1.14.0
+-e git+https://github.com/BlancJH/Tello-Edu-Obstacle-Detection.git@cb657309e0dfd9af4e425e8d590d25de992a7f05#egg=tello_obstacle_detection
+torch==2.2.2
+torchvision==0.17.2
+typing_extensions==4.14.1
