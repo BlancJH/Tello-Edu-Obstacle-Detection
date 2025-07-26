@@ -30,18 +30,24 @@ Pros: Low computation, zero mapping drift, easy debugging.
 Cons: Not effective to real-world uncontrolled environment.
 
 ### Obstacle Detection Strategy
-#### Problem:
+#### Problems:
 ##### Sensor Constraints
 As it is mentioned above, the Tello Edu is not equiped enough to detect depth of an object to avoid it. This is because it cannot calculate the size of the object with traditional way of calculation based on angle of view or laser reflection.
 
-#### Solution:
+##### Hardware Performance Limitation
+Streaming videos to process depth for every frame can be too heavy for the current computing hardware (MacBook Pro 2019).
+
+#### Solutions:
 ##### MiDaS Monocular Depth Estimation via OpenCV DNN
 Using this pre-trained depth estimator model running on the connected laptop via OpenCV’s DNN module gives us a full‑frame, per‑pixel depth map from a single RGB image stream.
+
+##### Send one frame each before proceeding to next node.
+The real-time video processing is not required as the drone navigation is not seamless operation by moving node by node. We can use one frame before it proceed to the next node to validate the path is clear. (For this level where is no moving obstacles.)
 
 #### Trade-offs
 Pros: No per‑object setup or real‑world size needed and be able to handle arbitrary scenes.
 
-Cons: Heavy model with less precise for absolute distance.
+Cons: Less precise for calculating absolute distance and not be able to handle moving objects.
 
 ## Reference
 
