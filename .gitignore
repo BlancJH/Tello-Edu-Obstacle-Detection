@@ -64,3 +64,6 @@ __pypackages__/
 
 # Editor files
 *.swp
+
+# Mac
+.DS*
