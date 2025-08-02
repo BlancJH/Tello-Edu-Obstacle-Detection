@@ -1,9 +1,17 @@
 import math
-import networkx as nx
 from typing import List, Tuple, Optional
+
+import networkx as nx
 import numpy as np
 
-from midas_pipeline.output_pipeline import choose_safe_direction, Direction
+# Direction and clearance logic live with the navigation helpers, not the
+# MIDAS depth pipeline. Importing from the correct module keeps
+# path_calculator lightweight and avoids unnecessary dependency on the depth
+# fetching package.
+from tello_obstacle_detection.drone_navigator.direction_navigator import (
+    Direction,
+    choose_safe_direction,
+)
 
 def find_path(
     G: nx.Graph,
