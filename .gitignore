@@ -51,6 +51,7 @@ coverage.xml
 .env/
 .venv/
 venv/
+venv*
 ENV/
 
 # MyPy
