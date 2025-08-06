@@ -1,3 +1,5 @@
 [submodule "src/tello_obstacle_detection/MiDaS-pipeline"]
 	path = src/tello_obstacle_detection/MiDaS-pipeline
 	url = https://github.com/BlancJH/MiDaS-pipeline.git
+	branch = codex/locate-and-update-maxxvit-configuration # TODO: test with Master branch
+
