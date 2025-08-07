@@ -106,15 +106,23 @@ def move_toward(
     new_y = pos[1] + dist * math.cos(math.radians(angle))
     return (new_x, new_y), heading
 
-def execute_simple_route(width, length, spacing, goal, altitude=1.0):
+def execute_simple_route(
+        width: float,
+        length: float,
+        spacing: float,
+        goal: tuple[float, float],
+        altitude: float = 1.0,
+        depth_callback: callable = None,
+    ) -> None:
     """
-    Plan a path on a fixed-spacing grid and fly the Tello along it.
-    No obstacle avoidance.
+    Plan a path on a fixed-spacing grid and fly the Tello along it,
+    triggering a MiDaS depth capture at each node.
 
     width, length (m): arena dimensions on ground plane
     spacing (m): grid node gap
     goal (x,y) in meters: destination coordinate
     altitude (m): takeoff altitude to maintain
+    depth_callback: optional function(depth: np.ndarray, rgb: np.ndarray)
     """
     # 1. build mesh and plan
     G, nodes = build_grid_x_graph(width, length, spacing)
@@ -125,7 +133,7 @@ def execute_simple_route(width, length, spacing, goal, altitude=1.0):
     drone = Tello()
     drone.connect()
     drone.streamon()
-    drone.takeoff() # ascend to default ~0.25m
+    drone.takeoff()  # ascend to default ~0.25m
 
     # 3. init depth model once
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -145,24 +153,47 @@ def execute_simple_route(width, length, spacing, goal, altitude=1.0):
         "net_h": net_h,
         "optimize": False,
     }
-    # 3. follow waypoints
+
+    # 4. follow waypoints and trigger depth capture
     pos = (0.0, 0.0)
     heading = 0.0  # assume facing +X
+
     for wp in path:
+        # ─── grab a depth frame now ────────────────────────────────
+        try:
+            rgb_frame, depth = capture_and_compute_depth(
+                drone,
+                depth_context["device"],
+                depth_context["model"],
+                depth_context["model_type"],
+                depth_context["transform"],
+                depth_context["net_w"],
+                depth_context["net_h"],
+                depth_context["optimize"],
+            )
+            if depth_callback:
+                depth_callback(depth, rgb_frame)
+        except Exception as e:
+            print(f"[execute_simple_route] depth capture failed at {wp}: {e}")
+
+        # ─── rotate & fly to the waypoint ──────────────────────────
         pos, heading = move_toward(
-        drone,
-        wp,
-        pos,
-        heading,
-        depth_context["device"],
-        depth_context["model"],
-        depth_context["model_type"],
-        depth_context["transform"],
-        depth_context["net_w"],
-        depth_context["net_h"],
-        depth_context["optimize"],
+            drone,
+            wp,
+            pos,
+            heading,
+            depth_context["device"],
+            depth_context["model"],
+            depth_context["model_type"],
+            depth_context["transform"],
+            depth_context["net_w"],
+            depth_context["net_h"],
+            depth_context["optimize"],
         )
-    time.sleep(0.5)
-    
-    # 4. land when done
+
+        # ─── pause before the next node ────────────────────────────
+        time.sleep(0.5)
+
+    # 5. land when done
     drone.land()
+    drone.streamoff()
