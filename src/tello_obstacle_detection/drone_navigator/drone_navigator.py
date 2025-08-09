@@ -1,20 +1,47 @@
 import math
 import time
 import torch
+import threading
+from typing import Callable
 from tello_obstacle_detection.depth_pipeline.midas_trigger import capture_and_compute_depth, init_depth_model
 from tello_obstacle_detection.gird_map.grid_map_builder import build_grid_x_graph
 from tello_obstacle_detection.path_calculator.path_calculator import find_path
 from djitellopy import Tello
 
+class DroneKeepAlive:
+    """Background thread to prevent Tello auto-landing"""
+    def __init__(self, drone, interval=10):
+        self.drone = drone
+        self.interval = interval
+        self.running = False
+        self.thread = None
+    
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._keep_alive_loop, daemon=True)
+        self.thread.start()
+    
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=2)
+    
+    def _keep_alive_loop(self):
+        while self.running:
+            try:
+                battery = self.drone.get_battery()
+                print(f"[KeepAlive] Battery: {battery}%")
+                time.sleep(self.interval)
+            except Exception as e:
+                print(f"[KeepAlive] Error: {e}")
+                time.sleep(1)
+
 def is_facing_target(heading, target, pos, tolerance_deg=10):
-    """
-    Returns True if the drone's heading is within `tolerance_deg` degrees of
-    the direction toward target. 0° = +Y forward, +90° = +X right (same as your system).
-    """
+    """Check if drone is facing toward the target within tolerance"""
     dx = target[0] - pos[0]
     dy = target[1] - pos[1]
     if abs(dx) < 1e-6 and abs(dy) < 1e-6:
-        return True  # already at target
+        return True
 
     desired_angle = math.degrees(math.atan2(dx, dy)) % 360
     delta = (desired_angle - heading + 360) % 360
@@ -23,144 +50,36 @@ def is_facing_target(heading, target, pos, tolerance_deg=10):
     return delta <= tolerance_deg
 
 def rotate_toward(drone, target, pos, heading):
+    """Rotate drone toward target direction"""
     dx = target[0] - pos[0]
     dy = target[1] - pos[1]
     if abs(dx) < 1e-6 and abs(dy) < 1e-6:
-        return heading  # no change
+        return heading
+    
     desired_angle = math.degrees(math.atan2(dx, dy)) % 360
     turn = (desired_angle - heading + 360) % 360
+    
     if turn > 180:
         delta = 360 - turn
-        drone.rotate_counter_clockwise(int(delta))
-        heading = (heading - delta) % 360
-    else:
-        drone.rotate_clockwise(int(turn))
-        heading = (heading + turn) % 360
-    return heading
-
-def move_toward(
-    drone,
-    target,
-    pos,
-    heading,
-    device,
-    model,
-    model_type,
-    transform,
-    net_w,
-    net_h,
-    optimize,
-    depth_callback=None,
-    alignment_tolerance=10,
-):
-    """
-    Rotate and move the drone from current pos/heading toward target waypoint.
-    If facing the target within `alignment_tolerance` degrees, capture a depth map
-    via MiDaS before proceeding. Returns updated position and heading.
-    depth_callback: optional callable(depth_array, rgb_frame) for post-processing.
-    """
-    dx, dy = target[0] - pos[0], target[1] - pos[1]
-    dist = math.hypot(dx, dy)
-    dist = math.hypot(dx, dy)
-
-    if dist < 1e-3:
-        return pos, heading  # already there
-
-    # Compute desired angle
-    angle = math.degrees(math.atan2(dx, dy)) % 360
-
-    # If already roughly facing the target, trigger depth capture once
-    if is_facing_target(heading, target, pos, tolerance_deg=alignment_tolerance):
-        try:
-            rgb_frame, depth = capture_and_compute_depth(
-                drone,  # assuming tello-like object is passed here
-                device,
-                model,
-                model_type,
-                transform,
-                net_w,
-                net_h,
-                optimize,
-            )
-            if depth_callback:
-                depth_callback(depth, rgb_frame)
-        except Exception as e:
-            # log or handle depth capture failure but don't block movement
-            print(f"[move_toward] depth capture failed: {e}")
-
-    # Rotate toward target
-    turn = (angle - heading + 360) % 360
-    if turn > 180:
-        delta = 360 - turn
-        if delta > 0:
+        if delta > 5:  # Set minimum rotation angle
             drone.rotate_counter_clockwise(int(delta))
             heading = (heading - delta) % 360
     else:
-        if turn > 0:
+        if turn > 5:  # Set minimum rotation angle
             drone.rotate_clockwise(int(turn))
             heading = (heading + turn) % 360
+    
+    return heading
 
-    drone.move_forward(int(dist * 100))
-
-    new_x = pos[0] + dist * math.sin(math.radians(angle))
-    new_y = pos[1] + dist * math.cos(math.radians(angle))
-    return (new_x, new_y), heading
-
-def execute_simple_route(
-        width: float,
-        length: float,
-        spacing: float,
-        goal: tuple[float, float],
-        altitude: float = 1.0,
-        depth_callback: callable = None,
-    ) -> None:
-    """
-    Plan a path on a fixed-spacing grid and fly the Tello along it,
-    triggering a MiDaS depth capture at each node.
-
-    width, length (m): arena dimensions on ground plane
-    spacing (m): grid node gap
-    goal (x,y) in meters: destination coordinate
-    altitude (m): takeoff altitude to maintain
-    depth_callback: optional function(depth: np.ndarray, rgb: np.ndarray)
-    """
-    # 1. build mesh and plan
-    G, nodes = build_grid_x_graph(width, length, spacing)
-    path = find_path(G, nodes, start=(0.0, 0.0), goal=goal)
-    print("Planned waypoints:", path)
-
-    # 2. connect and takeoff
-    drone = Tello()
-    drone.connect()
-    drone.streamon()
-    drone.takeoff()  # ascend to default ~0.25m
-
-    # 3. init depth model once
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, transform, net_w, net_h = init_depth_model(
-        device,
-        "src/tello_obstacle_detection/weights/dpt_swin2_large_384.pt",
-        model_type="dpt_swin2_large_384",
-        optimize=False,
-    )
-
-    depth_context = {
-        "device": device,
-        "model": model,
-        "model_type": "dpt_swin2_large_384",
-        "transform": transform,
-        "net_w": net_w,
-        "net_h": net_h,
-        "optimize": False,
-    }
-
-    # 4. follow waypoints and trigger depth capture
-    pos = (0.0, 0.0)
-    heading = 0.0  # assume facing +X
-
-    for wp in path:
-        # ─── grab a depth frame now ────────────────────────────────
+def safe_depth_capture(drone, depth_context, max_retries=3):
+    """Safe depth capture with retry logic"""
+    for attempt in range(max_retries):
         try:
+            print(f"[DepthCapture] Attempt {attempt + 1}/{max_retries}")
+            
+            # Wait briefly before frame capture
+            time.sleep(0.1)
+            
             rgb_frame, depth = capture_and_compute_depth(
                 drone,
                 depth_context["device"],
@@ -171,29 +90,88 @@ def execute_simple_route(
                 depth_context["net_h"],
                 depth_context["optimize"],
             )
-            if depth_callback:
-                depth_callback(depth, rgb_frame)
+            
+            print(f"[DepthCapture] Success - Depth shape: {depth.shape}")
+            return rgb_frame, depth
+            
         except Exception as e:
-            print(f"[execute_simple_route] depth capture failed at {wp}: {e}")
+            print(f"[DepthCapture] Attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(0.5)  # Wait before retry
+            else:
+                print("[DepthCapture] All attempts failed")
+                return None, None
 
-        # ─── rotate & fly to the waypoint ──────────────────────────
-        pos, heading = move_toward(
-            drone,
-            wp,
-            pos,
-            heading,
-            depth_context["device"],
-            depth_context["model"],
-            depth_context["model_type"],
-            depth_context["transform"],
-            depth_context["net_w"],
-            depth_context["net_h"],
-            depth_context["optimize"],
-        )
+def move_toward_with_depth(drone, target, pos, heading, depth_context, depth_callback):
+    """Move toward target with depth capture"""
+    dx, dy = target[0] - pos[0], target[1] - pos[1]
+    dist = math.hypot(dx, dy)
 
-        # ─── pause before the next node ────────────────────────────
-        time.sleep(0.5)
+    if dist < 0.1:  # Consider arrived if within 10cm
+        return pos, heading
 
-    # 5. land when done
-    drone.land()
-    drone.streamoff()
+    print(f"[Navigation] Moving to {target}, distance: {dist:.2f}m")
+
+    # 1. Rotate toward target
+    heading = rotate_toward(drone, target, pos, heading)
+    
+    # 2. Wait for stabilization after rotation
+    time.sleep(0.5)
+    
+    # 3. Depth capture (before moving)
+    rgb_frame, depth = safe_depth_capture(drone, depth_context)
+    if depth_callback and depth is not None:
+        depth_callback(depth, rgb_frame)
+    
+    # 4. Move (in cm units, max 500cm limit)
+    move_dist_cm = min(int(dist * 100), 500)
+    if move_dist_cm > 10:  # Only move if distance > 10cm
+        drone.move_forward(move_dist_cm)
+        time.sleep(move_dist_cm / 50)  # Wait for movement (assuming 50cm/s)
+    
+    # 5. Calculate new position
+    angle_rad = math.radians((heading + 90) % 360)  # Drone coordinate system correction
+    new_x = pos[0] + dist * math.cos(angle_rad)
+    new_y = pos[1] + dist * math.sin(angle_rad)
+    
+    return (new_x, new_y), heading
+
+def execute_simple_route(
+    drone,
+    width: float,
+    length: float,
+    spacing: float,
+    goal: tuple[float,float],
+    altitude: float = 1.0,
+    depth_context: dict | None = None,
+    depth_callback: Callable | None = None,
+) -> None:
+    """ 
+    Execute a grid-planned waypoint route on an already-initialized airborne drone while delegating keep-alive, connection, and landing to the caller. 
+        Args: 
+            drone: Tello-compatible drone instance already connected, streaming, and airborne. 
+            width: Width of the coverage area in meters used to build the grid. 
+            length: Length of the coverage area in meters used to build the grid. 
+            spacing: Grid spacing in meters between adjacent nodes along both axes. 
+            goal: Target (x,y) position in meters in the same local frame as the planner; start is assumed to be (0.0,0.0). 
+            altitude: Desired flight altitude in meters; reserved for downstream motion logic if utilized. 
+            depth_callback: Optional callable invoked by move_toward_with_depth for depth outputs or telemetry; may be None. Returns: None. 
+            Behavior: Builds a grid graph with build_grid_x_graph, computes a path with find_path, and iteratively calls move_toward_with_depth to advance toward each waypoint; 
+            
+    logs progress and continues past per-waypoint errors. Raises: Propagates exceptions thrown before the waypoint loop (e.g., planning failures); per-waypoint exceptions are caught, logged, and the loop continues.
+    
+    """
+    G,nodes=build_grid_x_graph(width,length,spacing)
+    path=find_path(G,nodes,start=(0.0,0.0),goal=goal)
+    print(f"Planned waypoints: {path}")
+    pos=(0.0,0.0);heading=0.0
+    for i,waypoint in enumerate(path):
+        print(f"\n[Route] Waypoint {i+1}/{len(path)}: {waypoint}")
+        try:
+            pos,heading=move_toward_with_depth(drone,waypoint,pos,heading,depth_context,depth_callback)
+            print(f"[Route] Reached waypoint {i+1}, current pos: {pos}")
+            time.sleep(1.0)
+        except Exception as e:
+            print(f"[Route] Error at waypoint {waypoint}: {e}")
+            continue
+    print("\n[Route] All waypoints completed!")
