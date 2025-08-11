@@ -11,14 +11,14 @@ def make_depth_context():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, transform, net_w, net_h = init_depth_model(
         device,
-        "src/tello_obstacle_detection/weights/dpt_swin2_large_384.pt",
-        model_type="dpt_swin2_large_384",
+        "src/tello_obstacle_detection/weights/dpt_swin2_tiny_256.pt",
+        model_type="dpt_swin2_tiny_256",
         optimize=False,
     )
     return {
         "device": device,
         "model": model,
-        "model_type": "dpt_swin2_large_384",
+        "model_type": "dpt_swin2_tiny_256",
         "transform": transform,
         "net_w": net_w,
         "net_h": net_h,

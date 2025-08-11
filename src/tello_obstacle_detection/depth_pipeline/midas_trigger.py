@@ -12,7 +12,7 @@ sys.path.insert(0, midas_root)
 from midas.model_loader import load_model, default_models
 from run import process, run
 
-def init_depth_model(device, model_weights, model_type="dpt_swin2_large_384", optimize=False):
+def init_depth_model(device, model_weights, model_type="dpt_swin2_tiny_256", optimize=False):
     """Load MiDaS model and preprocessing pipeline."""
     model, transform, net_w, net_h = load_model(device, model_weights, model_type, optimize)
     return model, transform, net_w, net_h
