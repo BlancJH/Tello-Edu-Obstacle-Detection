@@ -124,16 +124,17 @@ def move_toward_with_depth(drone, target, pos, heading, depth_context, depth_cal
         depth_callback(depth, rgb_frame)
     
     # 4. Move (in cm units, max 500cm limit)
-    move_dist_cm = min(int(dist * 100), 500)
-    if move_dist_cm > 10:  # Only move if distance > 10cm
-        drone.move_forward(move_dist_cm)
-        time.sleep(move_dist_cm / 50)  # Wait for movement (assuming 50cm/s)
+    move_cm = min(int(dist*100), 500)
+    if move_cm <= 10:
+        return pos, heading
+    drone.move_forward(move_cm)
+    time.sleep(move_cm/50.0)
     
     # 5. Calculate new position
-    angle_rad = math.radians((heading + 90) % 360)  # Drone coordinate system correction
-    new_x = pos[0] + dist * math.cos(angle_rad)
-    new_y = pos[1] + dist * math.sin(angle_rad)
-    
+    move_m = move_cm/100.0
+    ang = math.radians(heading)
+    new_x = pos[0] + move_m*math.sin(ang)
+    new_y = pos[1] + move_m*math.cos(ang)
     return (new_x, new_y), heading
 
 def execute_simple_route(
