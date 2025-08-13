@@ -68,3 +68,6 @@ __pypackages__/
 
 # Mac
 .DS*
+
+# MiDaS model
+weights/
