@@ -2,17 +2,24 @@ import cv2
 import torch
 import numpy as np
 import time
+from dotenv import load_dotenv
 from djitellopy import Tello
 
 import os, sys
 
+# Set submodule directory
 midas_root = os.path.join(os.path.dirname(__file__), "../MiDaS-pipeline")
 sys.path.insert(0, midas_root)
 
+# Import midas as package
 from midas.model_loader import load_model, default_models
 from run import process, run
 
-def init_depth_model(device, model_weights, model_type="dpt_swin2_tiny_256", optimize=False):
+# Import env Virables
+load_dotenv()
+model_type = os.getenv("MODEL_NAME")
+
+def init_depth_model(device, model_weights, model_type, optimize=False):
     """Load MiDaS model and preprocessing pipeline."""
     model, transform, net_w, net_h = load_model(device, model_weights, model_type, optimize)
     return model, transform, net_w, net_h
@@ -52,11 +59,3 @@ def capture_and_compute_depth(tello: Tello, device, model, model_type, transform
         device, model, model_type, transform, net_w, net_h, image_rgb, optimize
     )
     return image_rgb, depth
-
-# Example usage:
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# model, transform, net_w, net_h = init_depth_model(device, "weights/dpt_beit_large_512.pt")
-# tello = Tello()
-# tello.connect()
-# tello.streamon()
-# rgb_frame, depth_map = capture_and_compute_depth(tello, device, model, "dpt_beit_large_512", transform, net_w, net_h, False)
