@@ -72,13 +72,11 @@ def rotate_toward(drone, target, pos, heading):
     return heading
 
 def safe_depth_capture(drone, depth_context, max_retries=3):
-    """Safe depth capture with retry logic"""
+    """Safe depth capture with retry logic and keep-alive pings."""
     for attempt in range(max_retries):
         try:
             print(f"[DepthCapture] Attempt {attempt + 1}/{max_retries}")
-            
-            # Wait briefly before frame capture
-            time.sleep(0.1)
+            time.sleep(0.1)  # small delay before frame capture
             
             rgb_frame, depth = capture_and_compute_depth(
                 drone,
@@ -90,14 +88,20 @@ def safe_depth_capture(drone, depth_context, max_retries=3):
                 depth_context["net_h"],
                 depth_context["optimize"],
             )
-            
             print(f"[DepthCapture] Success - Depth shape: {depth.shape}")
             return rgb_frame, depth
-            
+
         except Exception as e:
             print(f"[DepthCapture] Attempt {attempt + 1} failed: {e}")
+
+            # Send keep-alive immediately after failure
+            try:
+                drone.get_battery()
+            except Exception as ka_err:
+                print(f"[DepthCapture] Keep-alive failed: {ka_err}")
+
             if attempt < max_retries - 1:
-                time.sleep(0.5)  # Wait before retry
+                time.sleep(0.5)
             else:
                 print("[DepthCapture] All attempts failed")
                 return None, None
