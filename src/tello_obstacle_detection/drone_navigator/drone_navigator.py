@@ -4,6 +4,7 @@ import torch
 import threading
 from typing import Callable
 from tello_obstacle_detection.depth_pipeline.midas_trigger import capture_and_compute_depth, init_depth_model
+from tello_obstacle_detection.depth_pipeline.post_processor import safe_direction, normalize_midas_depth
 from tello_obstacle_detection.gird_map.grid_map_builder import build_grid_x_graph
 from tello_obstacle_detection.path_calculator.path_calculator import find_path
 from djitellopy import Tello
@@ -126,15 +127,23 @@ def move_toward_with_depth(drone, target, pos, heading, depth_context, depth_cal
     rgb_frame, depth = safe_depth_capture(drone, depth_context)
     if depth_callback and depth is not None:
         depth_callback(depth, rgb_frame)
+
+    # 4. Print out the safe direction analysed
+    if depth is not None:
+        depth_normalisation = normalize_midas_depth(depth)
+        direction = safe_direction(depth_normalisation, near_thresh=0.35, min_free=0.65)
+        print(f"[Obstacle Check] Safe direction: {direction}")
+    else:
+        print("[Obstacle Check] Depth is not captured")
     
-    # 4. Move (in cm units, max 500cm limit)
+    # 5. Move (in cm units, max 500cm limit)
     move_cm = min(int(dist*100), 500)
     if move_cm <= 10:
         return pos, heading
     drone.move_forward(move_cm)
     time.sleep(move_cm/50.0)
     
-    # 5. Calculate new position
+    # 6. Calculate new position
     move_m = move_cm/100.0
     ang = math.radians(heading)
     new_x = pos[0] + move_m*math.sin(ang)

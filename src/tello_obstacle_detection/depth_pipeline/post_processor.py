@@ -32,10 +32,8 @@ def safe_direction(depth_norm: np.ndarray, near_thresh: float=0.35, min_free: fl
 
     Args:
         depth_norm (np.ndarray): Normalized depth map in [0,1], larger values ≈ closer obstacles.
-        near_thresh (float, optional): Threshold above which pixels are considered obstacles.
-                                       Default is 0.35.
-        min_free (float, optional): Minimum fraction of free pixels required in a sector to
-                                    deem it safe. Default is 0.65.
+        near_thresh (float, optional): Threshold above which pixels are considered obstacles. Default is 0.35.
+        min_free (float, optional): Minimum fraction of free pixels required in a sector to deem it safe. Default is 0.65.
 
     Returns:
         str: One of {"center", "right", "left", "none"} indicating the safest direction.
