@@ -34,3 +34,26 @@ def find_path(G, nodes, start, goal):
 
     # Map back to coordinates
     return [G.nodes[i]['coord'] for i in path_idxs]
+
+def path_re_planner(direction: str, path: list[tuple[float, float]], position: tuple, shift: float = 0.5) -> list[tuple[float, float]]:
+    """Adjust the nodes according to the safe direction detected."""
+    if not path:
+        print("[Route] No Path to re-plan.")
+
+    goal = path[-1]
+
+    if direction == "right":
+        # Push all the nodes (x + 0.5, y)
+        return [(x + 0.5, y) for (x, y) in path[:-1]] + [goal]
+
+    elif direction == 'left':
+        # Push all the nodes (x - 0.5, y)
+        return [(x - 0.5, y) for (x, y) in path[:-1]] + [goal]
+
+    elif direction == 'none':
+        # Add one node to the side and push all nodes except the goal to the following side.
+        detour_node = (position[0] + shift, position[1])
+        shifted_node = [(x + shift, y) for (x, y) in path[:-1]]
+        return [detour_node] + shifted_node + [goal]
+    
+    return path
