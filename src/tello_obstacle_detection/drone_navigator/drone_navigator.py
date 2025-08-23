@@ -179,21 +179,21 @@ def execute_simple_route(
     
     """
 
-    G, nodes = build_grid_x_graph(width, length, spacing, start)
+    G, nodes = build_grid_x_graph(width, length, spacing)
     path = find_path(G, nodes, start, goal)
     print(f"Planned waypoints: {path}")
 
     position = start
     heading = 0.0
-    i = 0  # index through path
+    i = 1  # index through path
 
     # Loop until all waypoints completed
     while i < len(path):
-        waypoint = path[i]
-        print(f"\n[Route] Waypoint {i+1}/{len(path)}: {waypoint}")
+        target = path[i]
+        print(f"\n[Route] Waypoint {i+1}/{len(path)}: {target}")
         try:
             position, heading, path, proceed = move_toward_with_depth(
-                drone, waypoint, position, heading, depth_context, depth_callback
+                drone, target, position, path, heading, depth_context, depth_callback
             )
         
             # Identify whether drone moved
@@ -203,6 +203,6 @@ def execute_simple_route(
                 pass
 
         except Exception as e:
-            print(f"[Route] Error at waypoint {waypoint}: {e}")
+            print(f"[Route] Error at waypoint {target}: {e}")
 
     print("\n[Route] All waypoints completed!")

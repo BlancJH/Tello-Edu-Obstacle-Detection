@@ -30,7 +30,8 @@ def main():
     WIDTH = 3.0
     LENGTH = 5.0
     SPACING = 0.5
-    GOAL = (2.5, 4.0)
+    START = (0.0, 0.0)
+    GOAL = (0.0, 4.0)
     ALTITUDE = 1.0
     drone = Tello()
     ka = None
@@ -56,6 +57,7 @@ def main():
             WIDTH,
             LENGTH,
             SPACING,
+            START,
             GOAL,
             ALTITUDE,
             depth_ctx,
