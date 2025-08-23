@@ -149,7 +149,7 @@ def move_toward_with_depth(drone, target, pos, path, heading, depth_context, dep
         new_position = (target[0], target[1])
         return new_position, heading, path, True
     else:
-        path_re_planner(direction, path, pos)
+        path = path_re_planner(direction, path, pos)
         return pos, heading, path, False
 
 def execute_simple_route(
@@ -200,7 +200,7 @@ def execute_simple_route(
             if proceed == True:
                 i += 1
             else:
-                pass
+                path = path
 
         except Exception as e:
             print(f"[Route] Error at waypoint {target}: {e}")
