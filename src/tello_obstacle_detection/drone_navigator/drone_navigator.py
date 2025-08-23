@@ -6,7 +6,7 @@ from typing import Callable
 from tello_obstacle_detection.depth_pipeline.midas_trigger import capture_and_compute_depth, init_depth_model
 from tello_obstacle_detection.depth_pipeline.post_processor import safe_direction, normalize_midas_depth
 from tello_obstacle_detection.gird_map.grid_map_builder import build_grid_x_graph
-from tello_obstacle_detection.path_calculator.path_calculator import find_path
+from tello_obstacle_detection.path_calculator.path_calculator import find_path, path_re_planner
 from djitellopy import Tello
 
 class DroneKeepAlive:
@@ -107,7 +107,7 @@ def safe_depth_capture(drone, depth_context, max_retries=3):
                 print("[DepthCapture] All attempts failed")
                 return None, None
 
-def move_toward_with_depth(drone, target, pos, heading, depth_context, depth_callback):
+def move_toward_with_depth(drone, target, pos, path, heading, depth_context, depth_callback):
     """Move toward target with depth capture"""
     dx, dy = target[0] - pos[0], target[1] - pos[1]
     dist = math.hypot(dx, dy)
@@ -135,27 +135,30 @@ def move_toward_with_depth(drone, target, pos, heading, depth_context, depth_cal
         print(f"[Obstacle Check] Safe direction: {direction}")
     else:
         print("[Obstacle Check] Depth is not captured")
-    
-    # 5. Move (in cm units, max 500cm limit)
-    move_cm = min(int(dist*100), 500)
-    if move_cm <= 10:
-        return pos, heading
-    drone.move_forward(move_cm)
-    time.sleep(move_cm/50.0)
-    
-    # 6. Calculate new position
-    move_m = move_cm/100.0
-    ang = math.radians(heading)
-    new_x = pos[0] + move_m*math.sin(ang)
-    new_y = pos[1] + move_m*math.cos(ang)
-    return (new_x, new_y), heading
+
+    # 5. Adjust the path or proceed
+    if direction == 'center':
+        # Move (in cm units, max 500cm limit)
+        move_cm = min(int(dist*100), 500)
+        if move_cm <= 10:
+            return pos, heading
+        drone.move_forward(move_cm)
+        time.sleep(move_cm/50.0)
+
+        # Update new position
+        new_position = (target[0], target[1])
+        return new_position, heading, path, True
+    else:
+        path_re_planner(direction, path, pos)
+        return pos, heading, path, False
 
 def execute_simple_route(
     drone,
     width: float,
     length: float,
     spacing: float,
-    goal: tuple[float,float],
+    start: tuple[float, float],
+    goal: tuple[float, float],
     altitude: float = 1.0,
     depth_context: dict | None = None,
     depth_callback: Callable | None = None,
@@ -175,17 +178,31 @@ def execute_simple_route(
     logs progress and continues past per-waypoint errors. Raises: Propagates exceptions thrown before the waypoint loop (e.g., planning failures); per-waypoint exceptions are caught, logged, and the loop continues.
     
     """
-    G,nodes=build_grid_x_graph(width,length,spacing)
-    path=find_path(G,nodes,start=(0.0,0.0),goal=goal)
+
+    G, nodes = build_grid_x_graph(width, length, spacing, start)
+    path = find_path(G, nodes, start, goal)
     print(f"Planned waypoints: {path}")
-    pos=(0.0,0.0);heading=0.0
-    for i,waypoint in enumerate(path):
+
+    position = start
+    heading = 0.0
+    i = 0  # index through path
+
+    # Loop until all waypoints completed
+    while i < len(path):
+        waypoint = path[i]
         print(f"\n[Route] Waypoint {i+1}/{len(path)}: {waypoint}")
         try:
-            pos,heading=move_toward_with_depth(drone,waypoint,pos,heading,depth_context,depth_callback)
-            print(f"[Route] Reached waypoint {i+1}, current pos: {pos}")
-            time.sleep(1.0)
+            position, heading, path, proceed = move_toward_with_depth(
+                drone, waypoint, position, heading, depth_context, depth_callback
+            )
+        
+            # Identify whether drone moved
+            if proceed == True:
+                i += 1
+            else:
+                pass
+
         except Exception as e:
             print(f"[Route] Error at waypoint {waypoint}: {e}")
-            continue
+
     print("\n[Route] All waypoints completed!")

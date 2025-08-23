@@ -52,8 +52,9 @@ def safe_direction(depth_norm: np.ndarray, near_thresh: float=0.35, min_free: fl
     # Priority: center > right > left
     if free_ratios["center"] >= min_free:
         return "center"
-    if free_ratios["right"] >= min_free:
+    elif free_ratios["right"] >= min_free:
         return "right"
-    if free_ratios["left"] >= min_free:
+    elif free_ratios["left"] >= min_free:
         return "left"
-    return "none"
+    else:
+        return "none"
